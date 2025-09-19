@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 // import { ICartItem } from "./interfaces"; // optional: you can define ICartItem separately
+export interface ICartItem extends Document {
+  contentId: mongoose.Schema.Types.ObjectId;
+  kind: "rent" | "buy";
+  price: number;
+}
 
 // Cart item subdocument schema
 const cartItemSchema = new Schema(

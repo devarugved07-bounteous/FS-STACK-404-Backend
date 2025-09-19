@@ -9,6 +9,10 @@ import userRoutes from "./routes/user.routes";
 import contentRoutes from "./routes/content.routes";
 import cartRoutes from "./routes/cart.routes";
 import checkoutRoutes from "./routes/checkout.routes";
+import stripeRoutes from "./routes/stripe.routes";
+
+// ...
+
 
 dotenv.config();
 const app = express();
@@ -24,6 +28,7 @@ app.use("/api/user", userRoutes);
 app.use("/api/content", contentRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);
+app.use("/api/stripe", stripeRoutes);
 
 // MongoDB Atlas connection
 const mongoUri = process.env.MONGO_URI;
