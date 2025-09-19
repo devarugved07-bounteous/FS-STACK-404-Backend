@@ -1,27 +1,40 @@
 import express from "express";
 import {
+  likeContent,
+  addComment,
+  addReview,
+  getComments,
+  getReviews,
   getAllContent,
   getContentByCategory,
   getContentById,
-  searchContent,
-  getSortedContent,
 } from "../controllers/content.controller";
+import { protect } from "../middleware/auth";
 
 const router = express.Router();
 
-// Base fetch
+// ✅ Get all content
 router.get("/", getAllContent);
 
-// Search endpoint
-router.get("/search", searchContent);
-
-// NEW: combined filter + search + sort + pagination
-router.get("/sorted/:category", getSortedContent);
-
-// Category filter
+// ✅ Get content by category
 router.get("/category/:category", getContentByCategory);
 
-// Single content by ID
+// ✅ Get content by ID
 router.get("/:id", getContentById);
+
+// ✅ Like a content
+router.post("/:id/like", protect, likeContent);
+
+// ✅ Add comment
+router.post("/:id/comment", protect, addComment);
+
+// ✅ Add review (movies only)
+router.post("/:id/review", protect, addReview);
+
+// ✅ Get comments
+router.get("/:id/comments", getComments);
+
+// ✅ Get reviews
+router.get("/:id/reviews", getReviews);
 
 export default router;
