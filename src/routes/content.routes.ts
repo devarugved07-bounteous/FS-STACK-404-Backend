@@ -8,6 +8,7 @@ import {
   getAllContent,
   getContentByCategory,
   getContentById,
+  searchContent
 } from "../controllers/content.controller";
 import { protect } from "../middleware/auth";
 
@@ -19,8 +20,11 @@ router.get("/", getAllContent);
 // ✅ Get content by category
 router.get("/category/:category", getContentByCategory);
 
+router.get("/search",searchContent);
+
 // ✅ Get content by ID
 router.get("/:id", getContentById);
+
 
 // ✅ Like a content
 router.post("/:id/like", protect, likeContent);
