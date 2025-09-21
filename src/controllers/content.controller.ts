@@ -24,15 +24,20 @@ export const getContentByCategory = async (req: Request, res: Response) => {
     const contents = await Content.find({ category });
     res.json(contents);
   } catch (err) {
-    res.status(500).json({ message: "Error fetching content by category", error: err });
+    res
+      .status(500)
+      .json({ message: "Error fetching content by category", error: err });
   }
 };
 
 // Get content by ID
+
 export const getContentById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const content = await Content.findById(id);
+    const content = await Content.findById(id)
+      .populate("comments.userId", "username")
+      .populate("reviews.userId", "username");
     if (!content) return res.status(404).json({ message: "Content not found" });
     res.json(content);
   } catch (err) {
@@ -40,11 +45,13 @@ export const getContentById = async (req: Request, res: Response) => {
   }
 };
 
+
 // Search content by query
 export const searchContent = async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
-    if (!q || typeof q !== "string") return res.status(400).json({ message: "Search query is required" });
+    if (!q || typeof q !== "string")
+      return res.status(400).json({ message: "Search query is required" });
 
     const results = await Content.find({
       $or: [
@@ -68,7 +75,11 @@ export const getSortedContent = async (req: Request, res: Response) => {
 
     const filter: any = {};
     if (category && category !== "all") filter.category = category;
-    if (q && typeof q === "string") filter.$or = [{ title: { $regex: q, $options: "i" } }, { description: { $regex: q, $options: "i" } }];
+    if (q && typeof q === "string")
+      filter.$or = [
+        { title: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
+      ];
 
     const sortObj: any = {};
     if (sort && typeof sort === "string") sortObj[sort] = order === "desc" ? -1 : 1;
@@ -78,7 +89,10 @@ export const getSortedContent = async (req: Request, res: Response) => {
     const limitNum = Math.max(1, parseInt(limit as string, 10));
     const skip = (pageNum - 1) * limitNum;
 
-    const [items, total] = await Promise.all([Content.find(filter).sort(sortObj).skip(skip).limit(limitNum), Content.countDocuments(filter)]);
+    const [items, total] = await Promise.all([
+      Content.find(filter).sort(sortObj).skip(skip).limit(limitNum),
+      Content.countDocuments(filter),
+    ]);
     const totalPages = Math.ceil(total / limitNum);
 
     res.status(200).json({ meta: { total, page: pageNum, limit: limitNum, totalPages }, items });
@@ -98,7 +112,8 @@ export const likeContent = async (req: AuthRequest, res: Response) => {
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
 
-    if (content.likes.includes(userId)) return res.status(400).json({ message: "Already liked" });
+    if (content.likes.includes(userId))
+      return res.status(400).json({ message: "Already liked" });
 
     content.likes.push(userId);
     await content.save();
@@ -109,12 +124,35 @@ export const likeContent = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Dislike content (remove like)
+export const dislikeContent = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const content = await Content.findById(id);
+    if (!content) return res.status(404).json({ message: "Content not found" });
+
+    const index = content.likes.indexOf(userId);
+    if (index === -1)
+      return res.status(400).json({ message: "Content not liked yet" });
+
+    content.likes.splice(index, 1);
+    await content.save();
+
+    res.json({ message: "Like removed", likesCount: content.likes.length });
+  } catch (err) {
+    res.status(500).json({ message: "Error removing like", error: err });
+  }
+};
+
 // Add comment
 export const addComment = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { text } = req.body;
     const userId = req.user._id;
+    const username = req.user.username;
 
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
@@ -138,7 +176,8 @@ export const addReview = async (req: AuthRequest, res: Response) => {
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
 
-    if (content.category !== "movie") return res.status(400).json({ message: "Reviews only allowed for movies" });
+    if (content.category !== "movie")
+      return res.status(400).json({ message: "Reviews only allowed for movies" });
 
     if (!content.reviews) content.reviews = [];
     content.reviews.push({ userId, text, createdAt: new Date() });
@@ -168,7 +207,8 @@ export const getReviews = async (req: Request, res: Response) => {
     const { id } = req.params;
     const content = await Content.findById(id).populate("reviews.userId", "username");
     if (!content) return res.status(404).json({ message: "Content not found" });
-    if (content.category !== "movie") return res.status(400).json({ message: "No reviews for this content" });
+    if (content.category !== "movie")
+      return res.status(400).json({ message: "No reviews for this content" });
     res.json({ reviews: content.reviews });
   } catch (err) {
     res.status(500).json({ message: "Error fetching reviews", error: err });

@@ -3,6 +3,9 @@ import dotenv from "dotenv";
 
 import { Request, Response } from "express";
 
+import Cart from "../models/Cart"; // Adjust import path if needed
+import { Order } from "../models/Order"; // Adjust import path if needed
+
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
@@ -11,7 +14,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 
 export const createCheckoutSession = async (req: any, res: Response) => {
   try {
-    const { items } = req.body;
+    const { items, userId } = req.body;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -27,7 +30,8 @@ export const createCheckoutSession = async (req: any, res: Response) => {
         quantity: 1,
       })),
       success_url: "http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "http://localhost:3000/cancel",
+      cancel_url: "http://localhost:5173/checkout",
+      client_reference_id: userId, // Pass userId here for webhook identification
     });
 
     res.json({ url: session.url });
@@ -36,24 +40,61 @@ export const createCheckoutSession = async (req: any, res: Response) => {
   }
 };
 
-
-export const paymentdetails =async (req:any, res:Response) => {
+export const paymentdetails = async (req: any, res: Response) => {
   const sessionId = req.query.session_id;
   if (!sessionId) {
-    return res.status(400).json({ error: 'session_id is required' });
+    return res.status(400).json({ error: "session_id is required" });
   }
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     // Optionally retrieve payment & customer info here
-    
+
     res.json(session);
   } catch (error: unknown) {
-  if (error instanceof Error) {
-    res.status(500).json({ error: error.message });
-  } else {
-    res.status(500).json({ error: 'Unknown error' });
+    if (error instanceof Error) {
+      res.status(500).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: "Unknown error" });
+    }
   }
-}
+};
 
+export const stripeWebhookHandler = async (req: any, res: Response) => {
+  console.log('Webhook received:', JSON.stringify(req.body, null, 2));
+  try {
+    const event = req.body;
+    if (event.type === 'checkout.session.completed') {
+      console.log('checkout.session.completed event:', event.data.object);
+
+      const session = event.data.object;
+      const userId = session.client_reference_id;
+
+      if (userId) {
+        try {
+          // Create order in the database
+          await Order.create({
+            userId,
+            items: session.display_items || [],
+            paymentIntentId: session.payment_intent,
+            amount_total: session.amount_total,
+            currency: session.currency,
+            status: 'paid',
+            createdAt: new Date(),
+          });
+
+          // Clear the cart for the user
+          await Cart.findOneAndUpdate({ userId }, { items: [] });
+
+          console.log('Order created and cart cleared for user:', userId);
+        } catch (error) {
+          console.error('Error creating order or clearing cart:', error);
+        }
+      }
+    }
+    res.status(200).send('Webhook received');
+  } catch (err) {
+    console.error('Webhook error:', err);
+    res.status(400).send('Webhook error');
+  }
 };

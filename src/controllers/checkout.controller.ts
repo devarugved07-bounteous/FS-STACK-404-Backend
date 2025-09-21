@@ -22,7 +22,7 @@ export const checkout = async (req: AuthRequest, res: Response) => {
     // Calculate total
     const total = cart.items.reduce((sum, item: ICartItem) => sum + item.price, 0);
 
-    // Create checkout/order
+    // Create checkout/order but DO NOT clear cart here
     const order = new Checkout({
       userId,
       items: cart.items,
@@ -31,18 +31,17 @@ export const checkout = async (req: AuthRequest, res: Response) => {
 
     await order.save();
 
-    // Replace clearing cart with atomic update to avoid version conflict
-    await Cart.findOneAndUpdate({ userId }, { $set: { items: [] } });
+    // REMOVE clearing cart here; will clear after payment success in webhook
 
     res.json({ message: "Checkout complete", order });
   } catch (err: any) {
     if (err.name === "VersionError") {
-      console.error('Version conflict during checkout:', err);
+      console.error("Version conflict during checkout:", err);
       return res.status(409).json({
-        message: 'Conflict: Cart or order was updated elsewhere. Please try again.',
+        message: "Conflict: Cart or order was updated elsewhere. Please try again.",
       });
     }
-    console.error('Checkout error:', err);
+    console.error("Checkout error:", err);
     res.status(500).json({ message: "Error during checkout", error: err.message || err });
   }
 };

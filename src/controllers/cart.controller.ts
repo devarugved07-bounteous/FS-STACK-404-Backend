@@ -6,7 +6,7 @@ import { AuthRequest } from "../middleware/auth";
 export const addToCart = async (req: AuthRequest, res: Response) => {
   try {
     const { contentId, kind, price } = req.body;
-    const userId = req.user?.id; // ✅ from middleware
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(400).json({ message: "User ID missing from token" });
@@ -18,6 +18,17 @@ export const addToCart = async (req: AuthRequest, res: Response) => {
       cart = new Cart({ userId, items: [] });
     }
 
+    // Check if item with same contentId and kind already exists
+    const existingItem = cart.items.find(
+      (item) =>
+        item.contentId.toString() === contentId &&
+        item.kind === kind
+    );
+
+    if (existingItem) {
+      return res.status(400).json({ message: 'Item already in cart for this kind' });
+    }
+
     cart.items.push({ contentId, kind, price });
     await cart.save();
 
@@ -26,6 +37,7 @@ export const addToCart = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: "Error adding to cart", error: err });
   }
 };
+
 
 // Get Cart
 export const getCart = async (req: AuthRequest, res: Response) => {

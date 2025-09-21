@@ -1,6 +1,7 @@
 import express from "express";
 import {
   likeContent,
+  dislikeContent,
   addComment,
   addReview,
   getComments,
@@ -28,6 +29,8 @@ router.get("/:id", getContentById);
 
 // ✅ Like a content
 router.post("/:id/like", protect, likeContent);
+router.delete('/:id/like', protect, dislikeContent);
+
 
 // ✅ Add comment
 router.post("/:id/comment", protect, addComment);

@@ -10,6 +10,10 @@ import contentRoutes from "./routes/content.routes";
 import cartRoutes from "./routes/cart.routes";
 import checkoutRoutes from "./routes/checkout.routes";
 import stripeRoutes from "./routes/stripe.routes";
+import ordersRoutes from './routes/orders.routes';
+//...
+
+
 
 // ...
 
@@ -29,6 +33,7 @@ app.use("/api/content", contentRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/stripe", stripeRoutes);
+app.use('/api/orders', ordersRoutes);
 
 // MongoDB Atlas connection
 const mongoUri = process.env.MONGO_URI;
