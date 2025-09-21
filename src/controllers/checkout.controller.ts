@@ -31,12 +31,18 @@ export const checkout = async (req: AuthRequest, res: Response) => {
 
     await order.save();
 
-    // ✅ Clear cart items safely
-    cart.items.splice(0, cart.items.length);
-    await cart.save();
+    // Replace clearing cart with atomic update to avoid version conflict
+    await Cart.findOneAndUpdate({ userId }, { $set: { items: [] } });
 
     res.json({ message: "Checkout complete", order });
-  } catch (err) {
-    res.status(500).json({ message: "Error during checkout", error: err });
+  } catch (err: any) {
+    if (err.name === "VersionError") {
+      console.error('Version conflict during checkout:', err);
+      return res.status(409).json({
+        message: 'Conflict: Cart or order was updated elsewhere. Please try again.',
+      });
+    }
+    console.error('Checkout error:', err);
+    res.status(500).json({ message: "Error during checkout", error: err.message || err });
   }
 };

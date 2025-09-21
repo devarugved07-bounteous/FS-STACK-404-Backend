@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import dotenv from "dotenv";
+
 import { Request, Response } from "express";
 
 dotenv.config();
@@ -25,7 +26,7 @@ export const createCheckoutSession = async (req: any, res: Response) => {
         },
         quantity: 1,
       })),
-      success_url: "http://localhost:3000/success",
+      success_url: "http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "http://localhost:3000/cancel",
     });
 
@@ -33,4 +34,26 @@ export const createCheckoutSession = async (req: any, res: Response) => {
   } catch (err) {
     res.status(500).json({ message: "Stripe checkout failed", error: err });
   }
+};
+
+
+export const paymentdetails =async (req:any, res:Response) => {
+  const sessionId = req.query.session_id;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'session_id is required' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    // Optionally retrieve payment & customer info here
+    
+    res.json(session);
+  } catch (error: unknown) {
+  if (error instanceof Error) {
+    res.status(500).json({ error: error.message });
+  } else {
+    res.status(500).json({ error: 'Unknown error' });
+  }
+}
+
 };
