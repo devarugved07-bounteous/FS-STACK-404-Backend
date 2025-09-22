@@ -6,7 +6,7 @@ export interface IUser extends Document {
   password: string;
   dob?: Date;
   address?: string;
-  watchlist?: string[];
+  watchlist: string[];
   refreshToken?: string;
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
@@ -17,7 +17,7 @@ const userSchema = new Schema<IUser>(
     password: { type: String, required: true },
     dob: { type: Date },
     address: { type: String },
-    watchlist: [{ type: Schema.Types.ObjectId, ref: "Content" }],
+    watchlist: [{ type: Schema.Types.ObjectId, ref: "Content", default: [] }],
     refreshToken: { type: String }, // store refresh token per user
   },
   { timestamps: true }
