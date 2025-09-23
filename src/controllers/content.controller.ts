@@ -67,37 +67,50 @@ export const searchContent = async (req: Request, res: Response) => {
   }
 };
 
-// Get sorted content with pagination
 export const getSortedContent = async (req: Request, res: Response) => {
   try {
     const { category } = req.params;
-    const { q, sort, order, page = "1", limit = "20" } = req.query;
+    const { q, sort, order, page = '1', limit = '20' } = req.query;
 
     const filter: any = {};
-    if (category && category !== "all") filter.category = category;
-    if (q && typeof q === "string")
+    if (category && category !== 'all') {
+      filter.category = category;
+    }
+    if (q && typeof q === 'string') {
       filter.$or = [
-        { title: { $regex: q, $options: "i" } },
-        { description: { $regex: q, $options: "i" } },
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } },
       ];
+    }
 
+    // Determine sort field and order
+    const sortField = sort && typeof sort === 'string' ? sort : 'createdAt';
+
+    // For alphabetical sorting, ensure collation for correct sorting
+    const sortOrder = order === 'desc' ? -1 : 1;
     const sortObj: any = {};
-    if (sort && typeof sort === "string") sortObj[sort] = order === "desc" ? -1 : 1;
-    else sortObj["createdAt"] = -1;
+    sortObj[sortField] = sortOrder;
 
     const pageNum = Math.max(1, parseInt(page as string, 10));
     const limitNum = Math.max(1, parseInt(limit as string, 10));
     const skip = (pageNum - 1) * limitNum;
 
+    // If sorting by title for alphabetical sort, use collation for proper letter-case sorting
+    let query = Content.find(filter).sort(sortObj).skip(skip).limit(limitNum);
+    if (sortField === 'title') {
+      query = query.collation({ locale: 'en', strength: 2 }); // case-insensitive sorting
+    }
+
     const [items, total] = await Promise.all([
-      Content.find(filter).sort(sortObj).skip(skip).limit(limitNum),
+      query.exec(),
       Content.countDocuments(filter),
     ]);
+
     const totalPages = Math.ceil(total / limitNum);
 
     res.status(200).json({ meta: { total, page: pageNum, limit: limitNum, totalPages }, items });
   } catch (err) {
-    res.status(500).json({ message: "Error fetching sorted content", error: err });
+    res.status(500).json({ message: 'Error fetching sorted content', error: err });
   }
 };
 

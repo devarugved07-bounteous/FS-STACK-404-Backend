@@ -9,7 +9,8 @@ import {
   getAllContent,
   getContentByCategory,
   getContentById,
-  searchContent
+  searchContent,
+  getSortedContent
 } from "../controllers/content.controller";
 import { protect } from "../middleware/auth";
 
@@ -22,6 +23,7 @@ router.get("/", getAllContent);
 router.get("/category/:category", getContentByCategory);
 
 router.get("/search",searchContent);
+router.get('/sort/:category', getSortedContent);
 
 // ✅ Get content by ID
 router.get("/:id", getContentById);
