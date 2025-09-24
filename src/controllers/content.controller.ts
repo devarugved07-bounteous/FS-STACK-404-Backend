@@ -1,38 +1,41 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import { Types, SortOrder } from "mongoose";
 import Content from "../models/Content";
-
-interface AuthRequest extends Request {
-  user?: any;
-}
+import { AuthRequest } from "../middleware/auth";
 
 // ------------------ GET ENDPOINTS ------------------
 
 // Get all content
-export const getAllContent = async (req: Request, res: Response) => {
+export const getAllContent = async (req: AuthRequest, res: Response) => {
   try {
     const contents = await Content.find();
     res.json(contents);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching content", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching content", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching content" });
+    }
   }
 };
 
 // Get content by category
-export const getContentByCategory = async (req: Request, res: Response) => {
+export const getContentByCategory = async (req: AuthRequest, res: Response) => {
   try {
     const { category } = req.params;
     const contents = await Content.find({ category });
     res.json(contents);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error fetching content by category", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching content by category", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching content by category" });
+    }
   }
 };
 
 // Get content by ID
-
-export const getContentById = async (req: Request, res: Response) => {
+export const getContentById = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const content = await Content.findById(id)
@@ -40,16 +43,19 @@ export const getContentById = async (req: Request, res: Response) => {
       .populate("reviews.userId", "username");
     if (!content) return res.status(404).json({ message: "Content not found" });
     res.json(content);
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching content by ID", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching content by ID", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching content by ID" });
+    }
   }
 };
 
-
 // Search content by query
-export const searchContent = async (req: Request, res: Response) => {
+export const searchContent = async (req: AuthRequest, res: Response) => {
   try {
-    const { q } = req.query;
+    const q = req.query.q;
     if (!q || typeof q !== "string")
       return res.status(400).json({ message: "Search query is required" });
 
@@ -62,55 +68,59 @@ export const searchContent = async (req: Request, res: Response) => {
     });
 
     res.json(results);
-  } catch (err) {
-    res.status(500).json({ message: "Error searching content", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error searching content", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error searching content" });
+    }
   }
 };
 
-export const getSortedContent = async (req: Request, res: Response) => {
+export const getSortedContent = async (req: AuthRequest, res: Response) => {
   try {
     const { category } = req.params;
-    const { q, sort, order, page = '1', limit = '20' } = req.query;
+    const { q, sort, order, page = "1", limit = "20" } = req.query;
 
-    const filter: any = {};
-    if (category && category !== 'all') {
+    const filter: Record<string, unknown> = {};
+    if (category && category !== "all") {
       filter.category = category;
     }
-    if (q && typeof q === 'string') {
+    if (q && typeof q === "string") {
       filter.$or = [
-        { title: { $regex: q, $options: 'i' } },
-        { description: { $regex: q, $options: 'i' } },
+        { title: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
       ];
     }
 
-    // Determine sort field and order
-    const sortField = sort && typeof sort === 'string' ? sort : 'createdAt';
-
-    // For alphabetical sorting, ensure collation for correct sorting
-    const sortOrder = order === 'desc' ? -1 : 1;
-    const sortObj: any = {};
+    const sortField = sort && typeof sort === "string" ? sort : "createdAt";
+    const sortOrder: SortOrder = order === "desc" ? -1 : 1;
+    const sortObj: Record<string, SortOrder> = {};
     sortObj[sortField] = sortOrder;
 
     const pageNum = Math.max(1, parseInt(page as string, 10));
     const limitNum = Math.max(1, parseInt(limit as string, 10));
     const skip = (pageNum - 1) * limitNum;
 
-    // If sorting by title for alphabetical sort, use collation for proper letter-case sorting
     let query = Content.find(filter).sort(sortObj).skip(skip).limit(limitNum);
-    if (sortField === 'title') {
-      query = query.collation({ locale: 'en', strength: 2 }); // case-insensitive sorting
+
+    if (sortField === "title") {
+      query = query.collation({ locale: "en", strength: 2 });
     }
 
-    const [items, total] = await Promise.all([
-      query.exec(),
-      Content.countDocuments(filter),
-    ]);
-
+    const [items, total] = await Promise.all([query.exec(), Content.countDocuments(filter)]);
     const totalPages = Math.ceil(total / limitNum);
 
-    res.status(200).json({ meta: { total, page: pageNum, limit: limitNum, totalPages }, items });
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching sorted content', error: err });
+    res.status(200).json({
+      meta: { total, page: pageNum, limit: limitNum, totalPages },
+      items,
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching sorted content", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching sorted content" });
+    }
   }
 };
 
@@ -120,20 +130,26 @@ export const getSortedContent = async (req: Request, res: Response) => {
 export const likeContent = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
 
-    if (content.likes.includes(userId))
+    // Use toString to compare ObjectIds safely
+    if (content.likes.some((likeId: Types.ObjectId) => likeId.toString() === userId.toString()))
       return res.status(400).json({ message: "Already liked" });
 
     content.likes.push(userId);
     await content.save();
 
     res.json({ message: "Content liked", likesCount: content.likes.length });
-  } catch (err) {
-    res.status(500).json({ message: "Error liking content", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error liking content", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error liking content" });
+    }
   }
 };
 
@@ -141,12 +157,15 @@ export const likeContent = async (req: AuthRequest, res: Response) => {
 export const dislikeContent = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
 
-    const index = content.likes.indexOf(userId);
+    const index = content.likes.findIndex(
+      (likeId: Types.ObjectId) => likeId.toString() === userId.toString()
+    );
     if (index === -1)
       return res.status(400).json({ message: "Content not liked yet" });
 
@@ -154,8 +173,12 @@ export const dislikeContent = async (req: AuthRequest, res: Response) => {
     await content.save();
 
     res.json({ message: "Like removed", likesCount: content.likes.length });
-  } catch (err) {
-    res.status(500).json({ message: "Error removing like", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error removing like", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error removing like" });
+    }
   }
 };
 
@@ -164,8 +187,9 @@ export const addComment = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { text } = req.body;
-    const userId = req.user._id;
-    const username = req.user.username;
+    const userId = req.user?._id;
+    const username = req.user?.username;
+    if (!userId || !username) return res.status(401).json({ message: "Unauthorized" });
 
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
@@ -174,8 +198,12 @@ export const addComment = async (req: AuthRequest, res: Response) => {
     await content.save();
 
     res.json({ message: "Comment added", comments: content.comments });
-  } catch (err) {
-    res.status(500).json({ message: "Error adding comment", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error adding comment", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error adding comment" });
+    }
   }
 };
 
@@ -184,7 +212,8 @@ export const addReview = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { text } = req.body;
-    const userId = req.user._id;
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const content = await Content.findById(id);
     if (!content) return res.status(404).json({ message: "Content not found" });
@@ -197,25 +226,33 @@ export const addReview = async (req: AuthRequest, res: Response) => {
     await content.save();
 
     res.json({ message: "Review added", reviews: content.reviews });
-  } catch (err) {
-    res.status(500).json({ message: "Error adding review", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error adding review", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error adding review" });
+    }
   }
 };
 
 // Get comments
-export const getComments = async (req: Request, res: Response) => {
+export const getComments = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const content = await Content.findById(id).populate("comments.userId", "username");
     if (!content) return res.status(404).json({ message: "Content not found" });
     res.json({ comments: content.comments });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching comments", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching comments", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching comments" });
+    }
   }
 };
 
 // Get reviews
-export const getReviews = async (req: Request, res: Response) => {
+export const getReviews = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const content = await Content.findById(id).populate("reviews.userId", "username");
@@ -223,7 +260,11 @@ export const getReviews = async (req: Request, res: Response) => {
     if (content.category !== "movie")
       return res.status(400).json({ message: "No reviews for this content" });
     res.json({ reviews: content.reviews });
-  } catch (err) {
-    res.status(500).json({ message: "Error fetching reviews", error: err });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Error fetching reviews", error: err.message });
+    } else {
+      res.status(500).json({ message: "Error fetching reviews" });
+    }
   }
 };

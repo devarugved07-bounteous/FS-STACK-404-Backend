@@ -1,36 +1,46 @@
 // src/middleware/auth.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
+import User, { IUser } from "../models/User";
 
+// JWT Payload interface
+interface JwtPayload {
+  id: string;
+  email: string;
+  username: string;
+}
+
+// Extend Express Request
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: IUser;
 }
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
-  let token;
+  let token: string | undefined;
 
-  // Check for Authorization header
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer")
+  ) {
     try {
       token = req.headers.authorization.split(" ")[1];
 
-      // Verify token
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "secret");
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || "secret"
+      ) as JwtPayload;
 
-      // Find user by ID from token
-      const user = await User.findById(decoded.id).select("-password"); // exclude password
-      if (!user) return res.status(401).json({ message: "User not found" });
+      const user = await User.findById(decoded.id).select("-password");
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
 
-      // Attach full user object to request
       req.user = user;
-      next();
+      return next();
     } catch (err) {
       return res.status(401).json({ message: "Not authorized, token failed" });
     }
   }
 
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
+  return res.status(401).json({ message: "Not authorized, no token" });
 };

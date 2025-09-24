@@ -1,25 +1,46 @@
 import Stripe from "stripe";
 import dotenv from "dotenv";
-
 import { Request, Response } from "express";
+import { Stripe as StripeNamespace } from "stripe";
 
-import Cart from "../models/Cart"; // Adjust import path if needed
-import { Order } from "../models/Order"; // Adjust import path if needed
+import Cart from "../models/Cart";
+import { Order } from "../models/Order";
 
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2022-11-15" as any,
+  apiVersion: "2025-08-27.basil", // ✅ Match this with your installed Stripe types
 });
 
-export const createCheckoutSession = async (req: any, res: Response) => {
+interface CheckoutItem {
+  contentId: {
+    title: string;
+  };
+  price: number;
+}
+
+interface StripeSessionRequest extends Request {
+  body: {
+    items: CheckoutItem[];
+    userId: string;
+  };
+}
+
+interface StripeWebhookRequest extends Request {
+  body: StripeNamespace.Event;
+}
+
+export const createCheckoutSession = async (
+  req: StripeSessionRequest,
+  res: Response
+) => {
   try {
     const { items, userId } = req.body;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-      line_items: items.map((item: any) => ({
+      line_items: items.map((item) => ({
         price_data: {
           currency: "usd",
           product_data: {
@@ -29,29 +50,33 @@ export const createCheckoutSession = async (req: any, res: Response) => {
         },
         quantity: 1,
       })),
-      success_url: "http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}",
+      success_url:
+        "http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}",
       cancel_url: "http://localhost:5173/checkout",
-      client_reference_id: userId, // Pass userId here for webhook identification
+      client_reference_id: userId,
     });
 
     res.json({ url: session.url });
   } catch (err) {
-    res.status(500).json({ message: "Stripe checkout failed", error: err });
+    if (err instanceof Error) {
+      res.status(500).json({ message: "Stripe checkout failed", error: err.message });
+    } else {
+      res.status(500).json({ message: "Stripe checkout failed" });
+    }
   }
 };
 
-export const paymentdetails = async (req: any, res: Response) => {
-  const sessionId = req.query.session_id;
+export const paymentdetails = async (req: Request, res: Response) => {
+  const sessionId = req.query.session_id as string;
+
   if (!sessionId) {
     return res.status(400).json({ error: "session_id is required" });
   }
 
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    // Optionally retrieve payment & customer info here
-
     res.json(session);
-  } catch (error: unknown) {
+  } catch (error) {
     if (error instanceof Error) {
       res.status(500).json({ error: error.message });
     } else {
@@ -60,41 +85,44 @@ export const paymentdetails = async (req: any, res: Response) => {
   }
 };
 
-export const stripeWebhookHandler = async (req: any, res: Response) => {
-  console.log('Webhook received:', JSON.stringify(req.body, null, 2));
+export const stripeWebhookHandler = async (
+  req: StripeWebhookRequest,
+  res: Response
+) => {
+  console.log("Webhook received:", JSON.stringify(req.body, null, 2));
   try {
     const event = req.body;
-    if (event.type === 'checkout.session.completed') {
-      console.log('checkout.session.completed event:', event.data.object);
 
-      const session = event.data.object;
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.client_reference_id;
 
       if (userId) {
         try {
-          // Create order in the database
+          const orderItems: unknown[] = []; // You can replace this with your real item parser if needed
+
           await Order.create({
             userId,
-            items: session.display_items || [],
-            paymentIntentId: session.payment_intent,
-            amount_total: session.amount_total,
-            currency: session.currency,
-            status: 'paid',
+            items: orderItems,
+            paymentIntentId: session.payment_intent?.toString() || "",
+            amount_total: session.amount_total || 0,
+            currency: session.currency || "usd",
+            status: "paid",
             createdAt: new Date(),
           });
 
-          // Clear the cart for the user
           await Cart.findOneAndUpdate({ userId }, { items: [] });
 
-          console.log('Order created and cart cleared for user:', userId);
+          console.log("Order created and cart cleared for user:", userId);
         } catch (error) {
-          console.error('Error creating order or clearing cart:', error);
+          console.error("Error creating order or clearing cart:", error);
         }
       }
     }
-    res.status(200).send('Webhook received');
+
+    res.status(200).send("Webhook received");
   } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(400).send('Webhook error');
+    console.error("Webhook error:", err);
+    res.status(400).send("Webhook error");
   }
 };

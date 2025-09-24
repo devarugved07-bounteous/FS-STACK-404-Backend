@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
+import User, { IUser } from "../models/User";
 
 const generateAccessToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || "secret", { expiresIn: "2d" });
@@ -26,14 +26,17 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
-    const user: any = await User.findOne({ username });
+
+    // Cast user as IUser or null
+    const user = await User.findOne({ username }) as IUser | null;
 
     if (user && (await user.matchPassword(password))) {
-      // Generate tokens
-      const accessToken = generateAccessToken(user._id);
-      const refreshToken = generateRefreshToken(user._id);
+      // Convert _id (ObjectId) to string before using
+      const userId = user._id.toString();
 
-      // Save refreshToken in DB
+      const accessToken = generateAccessToken(userId);
+      const refreshToken = generateRefreshToken(userId);
+
       user.refreshToken = refreshToken;
       await user.save();
 
@@ -56,12 +59,13 @@ export const refreshToken = async (req: Request, res: Response) => {
   if (!token) return res.status(401).json({ message: "Refresh token required" });
 
   try {
-    const user = await User.findOne({ refreshToken: token });
+    const user = await User.findOne({ refreshToken: token }) as IUser | null;
     if (!user) return res.status(403).json({ message: "Invalid refresh token" });
 
-    jwt.verify(token, process.env.JWT_REFRESH_SECRET || "refreshsecret", (err: any, decoded: any) => {
+    jwt.verify(token, process.env.JWT_REFRESH_SECRET || "refreshsecret", (err: unknown, decoded: any) => {
       if (err) return res.status(403).json({ message: "Invalid or expired refresh token" });
 
+      // decoded.id is string from token payload
       const accessToken = generateAccessToken(decoded.id);
       res.json({ accessToken });
     });
@@ -74,7 +78,7 @@ export const refreshToken = async (req: Request, res: Response) => {
 export const logout = async (req: Request, res: Response) => {
   const { token } = req.body;
   try {
-    const user = await User.findOne({ refreshToken: token });
+    const user = await User.findOne({ refreshToken: token }) as IUser | null;
     if (user) {
       user.refreshToken = undefined;
       await user.save();

@@ -5,6 +5,6 @@ import { protect } from "../middleware/auth";
 const router = express.Router();
 
 router.get("/profile", protect, getProfile);
-router.get("/", getAllUsers); // optional for testing/admin
+//router.get("/", getAllUsers); // optional for testing/admin
 
 export default router;
