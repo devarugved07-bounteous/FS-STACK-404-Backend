@@ -9,7 +9,7 @@ import { Order } from "../models/Order";
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-08-27.basil", // ✅ Match this with your installed Stripe types
+  apiVersion: "2025-08-27.basil",
 });
 
 interface CheckoutItem {
@@ -46,7 +46,7 @@ export const createCheckoutSession = async (
           product_data: {
             name: item.contentId.title,
           },
-          unit_amount: item.price * 100, // in cents
+          unit_amount: item.price * 100,
         },
         quantity: 1,
       })),
@@ -99,12 +99,10 @@ export const stripeWebhookHandler = async (
 
       if (userId) {
         try {
-          // Fetch the line items for this session from Stripe
           const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
 
-          // Map Stripe line items to your order items schema
           const orderItems = lineItems.data.map((item) => ({
-            title: item.description || "Unknown product",
+            name: item.description || "Unknown product",
             quantity: item.quantity || 1,
             price: item.amount_subtotal || 0,
           }));
@@ -119,7 +117,6 @@ export const stripeWebhookHandler = async (
             createdAt: new Date(),
           });
 
-          // Clear the user's cart
           await Cart.findOneAndUpdate({ userId }, { items: [] });
 
           console.log("Order created and cart cleared for user:", userId);
