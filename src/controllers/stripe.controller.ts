@@ -84,6 +84,12 @@ export const paymentdetails = async (req: Request, res: Response) => {
     }
   }
 };
+
+interface Content {
+  title: string;
+  // add other fields if needed
+}
+
 export const stripeWebhookHandler = async (
   req: StripeWebhookRequest,
   res: Response
@@ -102,29 +108,20 @@ export const stripeWebhookHandler = async (
       }
 
       try {
-        // Fetch the line items using session ID
-        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+        // Fetch user's cart with populated product info
+        const cart = await Cart.findOne({ userId }).populate("items.contentId");
 
-        // Map line items to order items with safe access to product name
-        const orderItems = lineItems.data.map((item) => {
-          let productName = "Unknown product";
-
-          if (item.price?.product && typeof item.price.product !== "string") {
-            if ("name" in item.price.product && typeof item.price.product.name === "string") {
-              productName = item.price.product.name;
-            }
-          } else if (item.description) {
-            productName = item.description;
-          }
+        const orderItems = cart?.items.map(item => {
+          // Type assertion that contentId is populated Content object
+          const content = item.contentId as unknown as Content;
 
           return {
-            name: productName,
-            quantity: item.quantity || 1,
-            price: item.amount_subtotal || 0,
+            name: typeof content === "object" && content !== null && "title" in content ? content.title : "Unknown product",
+            price: item.price,
           };
-        });
+        }) ?? [];
 
-        // Save the order in DB with items
+        // Save order with populated items info
         await Order.create({
           userId,
           items: orderItems,
@@ -135,7 +132,7 @@ export const stripeWebhookHandler = async (
           createdAt: new Date(),
         });
 
-        // Clear user's cart
+        // Clear the user's cart
         await Cart.findOneAndUpdate({ userId }, { items: [] });
 
         console.log("Order created and cart cleared for user:", userId);
