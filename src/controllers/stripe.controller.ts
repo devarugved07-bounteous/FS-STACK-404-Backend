@@ -84,7 +84,6 @@ export const paymentdetails = async (req: Request, res: Response) => {
     }
   }
 };
-
 export const stripeWebhookHandler = async (
   req: StripeWebhookRequest,
   res: Response
@@ -97,32 +96,52 @@ export const stripeWebhookHandler = async (
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.client_reference_id;
 
-      if (userId) {
-        try {
-          const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+      if (!userId) {
+        console.warn("No userId in session.client_reference_id");
+        return res.status(400).send("User ID missing in session");
+      }
 
-          const orderItems = lineItems.data.map((item) => ({
-            name: item.description || "Unknown product",
+      try {
+        // Fetch the line items using session ID
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+
+        // Map line items to order items with safe access to product name
+        const orderItems = lineItems.data.map((item) => {
+          let productName = "Unknown product";
+
+          if (item.price?.product && typeof item.price.product !== "string") {
+            if ("name" in item.price.product && typeof item.price.product.name === "string") {
+              productName = item.price.product.name;
+            }
+          } else if (item.description) {
+            productName = item.description;
+          }
+
+          return {
+            name: productName,
             quantity: item.quantity || 1,
             price: item.amount_subtotal || 0,
-          }));
+          };
+        });
 
-          await Order.create({
-            userId,
-            items: orderItems,
-            paymentIntentId: session.payment_intent?.toString() || "",
-            amount_total: session.amount_total || 0,
-            currency: session.currency || "usd",
-            status: "paid",
-            createdAt: new Date(),
-          });
+        // Save the order in DB with items
+        await Order.create({
+          userId,
+          items: orderItems,
+          paymentIntentId: session.payment_intent?.toString() || "",
+          amount_total: session.amount_total || 0,
+          currency: session.currency || "usd",
+          status: "paid",
+          createdAt: new Date(),
+        });
 
-          await Cart.findOneAndUpdate({ userId }, { items: [] });
+        // Clear user's cart
+        await Cart.findOneAndUpdate({ userId }, { items: [] });
 
-          console.log("Order created and cart cleared for user:", userId);
-        } catch (error) {
-          console.error("Error creating order or clearing cart:", error);
-        }
+        console.log("Order created and cart cleared for user:", userId);
+      } catch (error) {
+        console.error("Error creating order or clearing cart:", error);
+        return res.status(500).send("Internal server error");
       }
     }
 
