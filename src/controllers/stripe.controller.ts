@@ -99,7 +99,15 @@ export const stripeWebhookHandler = async (
 
       if (userId) {
         try {
-          const orderItems: unknown[] = []; // You can replace this with your real item parser if needed
+          // Fetch the line items for this session from Stripe
+          const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+
+          // Map Stripe line items to your order items schema
+          const orderItems = lineItems.data.map((item) => ({
+            title: item.description || "Unknown product",
+            quantity: item.quantity || 1,
+            price: item.amount_subtotal || 0,
+          }));
 
           await Order.create({
             userId,
@@ -111,6 +119,7 @@ export const stripeWebhookHandler = async (
             createdAt: new Date(),
           });
 
+          // Clear the user's cart
           await Cart.findOneAndUpdate({ userId }, { items: [] });
 
           console.log("Order created and cart cleared for user:", userId);
