@@ -51,8 +51,8 @@ export const createCheckoutSession = async (
         quantity: 1,
       })),
       success_url:
-        "https://viora-org.netlify.app/success?session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "https://viora-org.netlify.app/checkout",
+        "https://frontend-fs-404-production.up.railway.app/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://frontend-fs-404-production.up.railway.app/checkout",
       client_reference_id: userId,
     });
  
